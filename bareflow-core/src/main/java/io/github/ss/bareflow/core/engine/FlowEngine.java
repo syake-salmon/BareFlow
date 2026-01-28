@@ -172,6 +172,7 @@ public class FlowEngine {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException ignored) {
+            // NOP
         }
     }
 }
