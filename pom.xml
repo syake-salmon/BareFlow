@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- ===== Project Metadata ===== -->
+    <groupId>io.github.syake-salmon</groupId>
+    <artifactId>bareflow-parent</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>BareFlow Parent</name>
+    <description>Minimal core. Maximum clarity. A specification-driven flow engine.</description>
+    <url>https://github.com/syake-salmon/BareFlow</url>
+    <!-- ===== License ===== -->
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+        </license>
+    </licenses>
+    <!-- ===== SCM (GitHub) ===== -->
+    <scm>
+        <url>https://github.com/syake-salmon/BareFlow</url>
+        <connection>scm:git:https://github.com/syake-salmon/BareFlow.git</connection>
+        <developerConnection>scm:git:https://github.com/syake-salmon/BareFlow.git</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
+    <!-- ===== Properties ===== -->
+    <properties>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>${encoding}</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>${encoding}</project.reporting.outputEncoding>
+        <encoding>UTF-8</encoding>
+        <java.version>17</java.version>
+    </properties>
+    <!-- ===== Modules ===== -->
+    <modules>
+        <module>bareflow-core</module>
+        <module>bareflow-resolver-filesystem</module>
+        <module>bareflow-extensions</module>
+        <module>bareflow-runtime</module>
+    </modules>
+    <!-- ===== Dependency Management ===== -->
+    <dependencyManagement>
+        <dependencies>
+            <!-- Jackson(YAML Resolver) -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>3.0.4</version>
+            </dependency>
+            <!-- SnakeYAML -->
+            <dependency>
+                <groupId>org.snakeyaml</groupId>
+                <artifactId>snakeyaml-engine</artifactId>
+                <version>3.0.1</version>
+            </dependency>
+            <!-- SLF4J API -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>2.0.17</version>
+            </dependency>
+            <!-- JUnit -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>6.0.2</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+    <!-- ===== Build Plugins ===== -->
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Compiler Plugin -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.14.1</version>
+                    <configuration>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
+                    </configuration>
+                </plugin>
+                <!-- Surefire (JUnit) -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.4</version>
+                    <configuration>
+                        <useModulePath>false</useModulePath>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
