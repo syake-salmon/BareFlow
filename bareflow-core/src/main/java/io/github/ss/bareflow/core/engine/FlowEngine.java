@@ -5,6 +5,8 @@ import io.github.ss.bareflow.core.definition.FlowDefinition;
 import io.github.ss.bareflow.core.definition.OnErrorDefinition;
 import io.github.ss.bareflow.core.definition.RetryPolicy;
 import io.github.ss.bareflow.core.definition.StepDefinition;
+import io.github.ss.bareflow.core.engine.evaluator.StepEvaluator;
+import io.github.ss.bareflow.core.engine.invoker.StepInvoker;
 import io.github.ss.bareflow.core.exception.BusinessException;
 import io.github.ss.bareflow.core.exception.StepExecutionException;
 import io.github.ss.bareflow.core.exception.SystemException;
@@ -18,13 +20,27 @@ import java.util.Map;
  * Formal implementation of BareFlow's execution engine.
  * Executes steps sequentially with retry and onError handling.
  *
- * This engine is pure and depends only on core abstractions:
+ * This engine relies on StepEvaluator for resolving input/output mappings.
+ * BareFlow's evaluation model is intentionally simple:
+ *
+ * - Only flat placeholders of the form "${name}" are supported.
+ * - Nested or hierarchical expressions such as "${a.b}" are not supported.
+ * - For input evaluation: placeholders are resolved from the ExecutionContext.
+ * - For output evaluation: placeholders are resolved first from the raw output
+ * returned by the StepInvoker, then from the ExecutionContext.
+ *
+ * These rules are defined by StepEvaluator and enforced by the default
+ * implementation provided in the core module.
+ *
+ * Core dependencies:
  * - StepEvaluator
  * - StepInvoker
- * - Definition models
+ * - Definition models (FlowDefinition, StepDefinition, RetryPolicy,
+ * OnErrorDefinition)
  * - ExecutionContext
  * - StepTrace
  */
+
 public class FlowEngine {
     private final StepEvaluator evaluator;
     private final StepInvoker invoker;
@@ -35,20 +51,34 @@ public class FlowEngine {
     }
 
     /**
-     * Execute a flow using the given context and trace.
-     *
-     * @param flow  flow definition
-     * @param ctx   execution context
-     * @param trace step trace collector
+     * Execute a flow using the given context.
+     * Returns a StepTrace representing the full execution history.
+     * 
+     * @param flow flow definition
+     * @param ctx  execution context
      */
-    public void execute(FlowDefinition flow, ExecutionContext ctx, StepTrace trace) {
+    public StepTrace execute(FlowDefinition flow, ExecutionContext ctx) {
+        StepTrace trace = new StepTrace();
+
         for (StepDefinition step : flow.getSteps()) {
             executeStepWithControl(flow, step, ctx, trace);
         }
+
+        return trace;
     }
 
     /**
      * Execute a single step with retry and onError handling.
+     *
+     * RetryPolicy:
+     * - attempts start at 1
+     * - retry is allowed while attempts <= maxAttempts
+     * - this means "maxAttempts = maximum number of total attempts"
+     *
+     * Output mapping:
+     * - if the output mapping is empty, nothing is written to the context
+     * - if the mapping is present, only mapped keys are evaluated and merged
+     * - evaluator handles simple "${name}" placeholders (no nested paths)
      */
     private void executeStepWithControl(FlowDefinition flow,
             StepDefinition step,
@@ -71,9 +101,10 @@ public class FlowEngine {
                 // 2. Invoke module operation
                 Map<String, Object> output = invoker.invoke(step.getModule(), step.getOperation(), evaluatedInput);
 
-                // 3. Merge output into context
+                // 3. Apply output mapping
                 if (!step.getOutput().isEmpty()) {
-                    ctx.merge(output);
+                    Map<String, Object> mapped = evaluator.evaluateOutput(step.getOutput(), output, ctx);
+                    ctx.merge(mapped);
                 }
 
                 // 4. Record success trace
@@ -121,6 +152,10 @@ public class FlowEngine {
 
     /**
      * Handle onError behavior (STOP / CONTINUE / RETRY).
+     *
+     * RETRY:
+     * - onError.RETRY performs exactly one retry
+     * - this is independent from RetryPolicy
      */
     private void handleOnError(FlowDefinition flow,
             StepDefinition step,

@@ -5,45 +5,68 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Execution context shared across steps.
- * Holds key-value pairs and allows merging outputs.
+ * Represents the mutable execution state of a flow.
+ *
+ * ExecutionContext is a flat key-value store used to pass data between steps.
+ * It provides simple read/write operations and supports snapshotting for trace
+ * recording. No hierarchical or nested resolution is performed.
+ *
+ * Characteristics:
+ * - Keys are simple strings.
+ * - Values are arbitrary objects.
+ * - Merging overwrites existing keys.
+ * - Snapshots are immutable copies.
+ *
+ * This class is intentionally minimal and deterministic.
+ * Higher-level semantics belong to FlowEngine and StepEvaluator.
  */
 public class ExecutionContext {
-    private final Map<String, Object> values = new HashMap<>();
-
-    public boolean contains(String key) {
-        return values.containsKey(key);
-    }
-
-    public Object get(String key) {
-        return values.get(key);
-    }
-
-    public void put(String key, Object value) {
-        values.put(key, value);
-    }
+    private final Map<String, Object> data = new HashMap<>();
 
     /**
-     * Merge output map into context.
+     * Retrieve a value by key.
      */
-    public void merge(Map<String, Object> output) {
-        if (output == null)
-            return;
-        values.putAll(output);
+    public Object get(String key) {
+        return data.get(key);
     }
 
     /**
-     * Create a defensive snapshot of the current context.
-     * Used for StepTrace recording.
+     * Store or overwrite a value.
+     */
+    public void put(String key, Object value) {
+        data.put(key, value);
+    }
+
+    /**
+     * Check if a key exists.
+     */
+    public boolean contains(String key) {
+        return data.containsKey(key);
+    }
+
+    /**
+     * Merge another map into this context.
+     * Existing keys are overwritten.
+     */
+    public void merge(Map<String, Object> values) {
+        if (values != null) {
+            data.putAll(values);
+        }
+    }
+
+    /**
+     * Return an immutable snapshot of the current state.
+     * Used by StepTrace to capture pre-step context.
      */
     public Map<String, Object> snapshot() {
-        return Collections.unmodifiableMap(new HashMap<>(values));
+        return Collections.unmodifiableMap(new HashMap<>(data));
     }
 
     /**
-     * Expose internal map (read-only).
+     * Return an immutable view of the current context.
+     * Useful for debugging or external inspection.
      */
-    public Map<String, Object> asMap() {
-        return Collections.unmodifiableMap(values);
+    public Map<String, Object> view() {
+        return Collections.unmodifiableMap(data);
     }
 }

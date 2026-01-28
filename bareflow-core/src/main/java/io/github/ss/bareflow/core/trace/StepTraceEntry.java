@@ -5,35 +5,33 @@ import java.util.Map;
 
 /**
  * Represents a single step execution record.
- * Immutable entry containing:
- * - step name
- * - context snapshot before execution
- * - evaluated input
- * - output (if success)
- * - error (if failure)
- * - start/end timestamps
+ * Captures the state before execution, the evaluated input,
+ * the raw output (if any), and the error (if any).
+ *
+ * All fields are immutable.
  */
 public class StepTraceEntry {
     private final String stepName;
     private final Map<String, Object> beforeContext;
-    private final Map<String, Object> input;
-    private final Map<String, Object> output;
+    private final Map<String, Object> evaluatedInput;
+    private final Map<String, Object> rawOutput;
     private final Throwable error;
     private final Instant startTime;
     private final Instant endTime;
 
-    public StepTraceEntry(String stepName,
+    public StepTraceEntry(
+            String stepName,
             Map<String, Object> beforeContext,
-            Map<String, Object> input,
-            Map<String, Object> output,
+            Map<String, Object> evaluatedInput,
+            Map<String, Object> rawOutput,
             Throwable error,
             Instant startTime,
             Instant endTime) {
 
         this.stepName = stepName;
         this.beforeContext = beforeContext;
-        this.input = input;
-        this.output = output;
+        this.evaluatedInput = evaluatedInput;
+        this.rawOutput = rawOutput;
         this.error = error;
         this.startTime = startTime;
         this.endTime = endTime;
@@ -47,12 +45,12 @@ public class StepTraceEntry {
         return beforeContext;
     }
 
-    public Map<String, Object> getInput() {
-        return input;
+    public Map<String, Object> getEvaluatedInput() {
+        return evaluatedInput;
     }
 
-    public Map<String, Object> getOutput() {
-        return output;
+    public Map<String, Object> getRawOutput() {
+        return rawOutput;
     }
 
     public Throwable getError() {

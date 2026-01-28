@@ -3,49 +3,69 @@ package io.github.ss.bareflow.runtime.executor;
 import io.github.ss.bareflow.core.context.ExecutionContext;
 import io.github.ss.bareflow.core.definition.FlowDefinition;
 import io.github.ss.bareflow.core.engine.FlowEngine;
-import io.github.ss.bareflow.core.engine.StepEvaluator;
-import io.github.ss.bareflow.core.engine.StepInvoker;
+import io.github.ss.bareflow.core.engine.evaluator.StepEvaluator;
+import io.github.ss.bareflow.core.engine.invoker.StepInvoker;
+import io.github.ss.bareflow.core.exception.SystemException;
+import io.github.ss.bareflow.core.resolver.FlowDefinitionResolver;
 import io.github.ss.bareflow.core.trace.StepTrace;
-import io.github.ss.bareflow.runtime.parser.FlowYamlParser;
 
-import java.io.InputStream;
+import java.util.Map;
 
 /**
- * High-level executor that ties together:
- * - YAML parsing
- * - FlowEngine execution
- * - Result aggregation
+ * Executes a flow by resolving its definition and delegating to FlowEngine.
+ * This executor is intentionally minimal and transparent.
  *
- * This class is intentionally minimal. It does not manage DI, logging,
- * module resolution, or any application-specific concerns.
+ * Responsibilities:
+ * - Resolve FlowDefinition using FlowDefinitionResolver
+ * - Initialize ExecutionContext with initial input
+ * - Construct FlowEngine with provided evaluator and invoker
+ * - Execute the flow and return FlowResult
+ *
+ * No additional behavior (logging, metrics, validation) is performed here.
+ * Such concerns belong to higher-level runtime layers.
  */
 public class FlowExecutor {
-    private final FlowYamlParser yamlParser;
-    private final FlowEngine flowEngine;
+    private final FlowDefinitionResolver definitionResolver;
+    private final StepEvaluator evaluator;
+    private final StepInvoker invoker;
 
-    /**
-     * @param evaluator StepEvaluator implementation
-     * @param invoker   StepInvoker implementation
-     */
-    public FlowExecutor(StepEvaluator evaluator, StepInvoker invoker) {
-        this.yamlParser = new FlowYamlParser();
-        this.flowEngine = new FlowEngine(evaluator, invoker);
+    public FlowExecutor(
+            FlowDefinitionResolver definitionResolver,
+            StepEvaluator evaluator,
+            StepInvoker invoker) {
+
+        this.definitionResolver = definitionResolver;
+        this.evaluator = evaluator;
+        this.invoker = invoker;
     }
 
     /**
-     * Execute a flow from a YAML InputStream.
+     * Execute a flow by its logical name.
      *
-     * @param yamlInput YAML file input
-     * @return FlowResult containing context and trace
+     * @param flowName logical flow name
+     * @param input    initial input context (may be empty)
+     * @return FlowResult containing final context and execution trace
      */
-    public FlowResult execute(InputStream yamlInput) {
-        FlowDefinition definition = yamlParser.parse(yamlInput);
+    public FlowResult execute(String flowName, Map<String, Object> input) {
+        try {
+            // 1. Resolve FlowDefinition
+            FlowDefinition definition = definitionResolver.resolve(flowName);
 
-        ExecutionContext ctx = new ExecutionContext();
-        StepTrace trace = new StepTrace();
+            // 2. Create ExecutionContext
+            ExecutionContext context = new ExecutionContext();
+            if (input != null) {
+                context.merge(input);
+            }
 
-        flowEngine.execute(definition, ctx, trace);
+            // 3. Execute via FlowEngine
+            FlowEngine engine = new FlowEngine(evaluator, invoker);
+            StepTrace trace = engine.execute(definition, context);
 
-        return new FlowResult(ctx, trace);
+            // 4. Return result
+            return new FlowResult(context, trace);
+
+        } catch (Exception e) {
+            throw new SystemException("Failed to execute flow: " + flowName, e);
+        }
     }
 }

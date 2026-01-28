@@ -38,26 +38,38 @@ public class FlowYamlParser {
             Object loaded = yamlLoader.loadFromInputStream(inputStream);
 
             if (!(loaded instanceof Map)) {
-                throw new SystemException("YAML root must be a map");
+                throw new SystemException("Invalid YAML: root must be a map");
             }
 
             Map<String, Object> root = (Map<String, Object>) loaded;
 
             String name = (String) root.get("name");
-            List<Map<String, Object>> stepsRaw = (List<Map<String, Object>>) root.get("steps");
-            Map<String, Object> onErrorRaw = (Map<String, Object>) root.get("onError");
-
-            if (name == null || stepsRaw == null) {
-                throw new SystemException("Flow YAML must contain 'name' and 'steps'");
+            if (name == null) {
+                throw new SystemException("Invalid YAML: Flow 'name' is required");
             }
 
-            List<StepDefinition> steps = stepsRaw.stream()
+            // --- metadata ---
+            Map<String, Object> metadata = root.containsKey("metadata")
+                    ? (Map<String, Object>) root.get("metadata")
+                    : Map.of();
+
+            // --- steps ---
+            List<Map<String, Object>> stepMaps = (List<Map<String, Object>>) root.get("steps");
+            if (stepMaps == null || stepMaps.isEmpty()) {
+                throw new SystemException("Invalid YAML: Flow must contain at least one step");
+            }
+
+            List<StepDefinition> steps = stepMaps.stream()
                     .map(this::parseStep)
                     .toList();
 
-            OnErrorDefinition flowOnError = parseOnError(onErrorRaw);
+            // --- flow-level onError ---
+            OnErrorDefinition onError = null;
+            if (root.containsKey("onError")) {
+                onError = parseOnError((Map<String, Object>) root.get("onError"));
+            }
 
-            return new FlowDefinition(name, steps, flowOnError);
+            return new FlowDefinition(name, steps, onError, metadata);
 
         } catch (Exception e) {
             throw new SystemException("Failed to parse YAML flow definition", e);
@@ -69,10 +81,16 @@ public class FlowYamlParser {
      */
     @SuppressWarnings("unchecked")
     private StepDefinition parseStep(Map<String, Object> raw) {
-
         String name = (String) raw.get("name");
         String module = (String) raw.get("module");
         String operation = (String) raw.get("operation");
+
+        if (name == null)
+            throw new SystemException("Invalid YAML: Step 'name' is required");
+        if (module == null)
+            throw new SystemException("Invalid YAML: Step 'module' is required");
+        if (operation == null)
+            throw new SystemException("Invalid YAML: Step 'operation' is required");
 
         Map<String, Object> input = (Map<String, Object>) raw.getOrDefault("input", Map.of());
         Map<String, Object> output = (Map<String, Object>) raw.getOrDefault("output", Map.of());
@@ -113,7 +131,18 @@ public class FlowYamlParser {
             return null;
         }
 
-        String action = (String) raw.get("action");
+        String actionStr = (String) raw.get("action");
+        if (actionStr == null) {
+            throw new SystemException("Invalid YAML: onError 'action' is required");
+        }
+
+        OnErrorDefinition.Action action;
+        try {
+            action = OnErrorDefinition.Action.valueOf(actionStr);
+        } catch (IllegalArgumentException e) {
+            throw new SystemException("Invalid YAML: onError 'action' must be one of STOP, CONTINUE, RETRY");
+        }
+
         Integer delayMillis = (Integer) raw.getOrDefault("delayMillis", 0);
         Map<String, Object> output = (Map<String, Object>) raw.getOrDefault("output", Map.of());
 

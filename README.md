@@ -1,40 +1,45 @@
-# BareFlow  
+# BareFlow — Minimal Core. Maximum Clarity.
 
 [English](README.md) | [日本語](README_jp.md)
 
-### Minimal core. Maximum clarity.
+BareFlow is a **specification‑driven, deterministic flow engine** designed for systems that demand  
+**predictability, transparency, and long‑term maintainability**.
 
-BareFlow is a specification‑driven flow engine built for systems that demand predictability, transparency, and long‑term maintainability.  
-It executes flows exactly as defined in YAML—no hidden logic, no side effects, no surprises.  
-The core stays intentionally minimal, while optional extensions let you enrich behavior when your application needs it.
+It executes flows **exactly as defined** in YAML.  
+No hidden logic. No side effects. No surprises.
+
+The core remains intentionally minimal.  
+Everything else lives at the edges.
 
 ---
 
-## ✨ Why BareFlow?
+# ✨ Why BareFlow?
 
 - **Pure execution model**  
-  Sequential, deterministic flow execution with zero implicit behavior.
+  Sequential, deterministic, and free of implicit behavior.
 
 - **Specification‑driven**  
-  What you write in YAML is exactly what runs. Nothing more, nothing less.
+  YAML → FlowDefinition → FlowEngine → Execution  
+  A perfectly transparent pipeline.
 
 - **Transparent by design**  
-  Every step is recorded in a clean, audit‑friendly StepTrace.
+  Every step is recorded in a clean, immutable StepTrace.
 
 - **Minimal core, extensible edges**  
-  Hooks, interceptors, and runtime integrations let you scale without polluting the engine.
+  Runtime layers provide module resolution, YAML parsing, and integrations—  
+  without polluting the engine.
 
 - **Predictable for large teams**  
-  No magic. No DSL complexity. No hidden state.  
+  No DSL. No magic. No hidden state.  
   Just a clean contract between FlowDefinition, FlowEngine, and your modules.
 
 ---
 
-## 🚀 What BareFlow *is* (and *is not*)
+# 🚀 What BareFlow *is* (and *is not*)
 
 ### BareFlow *is*:
 - A pure, sequential flow execution engine  
-- A bridge between specification (Excel/YAML) and execution  
+- A bridge between business specification (Excel/YAML) and execution  
 - A predictable foundation for Web/Batch runtimes  
 - A framework that stays out of your way
 
@@ -50,29 +55,113 @@ BareFlow just runs the flow.
 
 ---
 
-## 🧩 Core Concepts
+# 🧩 Core Concepts
 
-- **FlowDefinition (YAML)**  
-  A declarative, logic‑free specification of steps, inputs, outputs, and error handling.
+## **FlowDefinition (YAML → immutable model)**
+A declarative, logic‑free structure describing:
+- steps  
+- inputs / outputs  
+- retry policy  
+- error handling  
+- optional metadata  
 
-- **ExecutionContext**  
-  A pure data container passed through the flow.
-
-- **StepEvaluator**  
-  Resolves `${key}` references from the context.
-
-- **StepInvoker**  
-  Calls your modules with strict Input/Output DTOs.
-
-- **FlowResult**  
-  Final status, merged context, and full StepTrace.
-
-- **Runtime Layer**  
-  Web/Batch integration, transactions, parallelism, backoff, and lifecycle management.
+FlowDefinition contains **no behavior**.  
+Validation and parsing belong to the runtime.
 
 ---
 
-## 🧭 Philosophy
+## **ExecutionContext**
+A **flat key‑value store** passed through the flow.
+
+- No hierarchy  
+- No expressions  
+- No magic  
+- `snapshot()` for trace  
+- `view()` for inspection  
+
+The context is the single source of truth.
+
+---
+
+## **StepEvaluator**
+BareFlow’s placeholder model:
+
+- Supports only `${name}`  
+- No nested expressions (`${a.b}` is not allowed)  
+- Input evaluation: from ExecutionContext  
+- Output evaluation: rawOutput → ExecutionContext  
+- Unresolved placeholders become `null`
+
+Simple. Transparent. Deterministic.
+
+---
+
+## **StepInvoker**
+The execution boundary.
+
+- Calls your module’s method  
+- Signature: `Map<String,Object> → Map<String,Object>`  
+- BusinessException is propagated  
+- Other exceptions become SystemException  
+
+Invoker contains **no business logic**.
+
+---
+
+## **FlowEngine**
+The heart of BareFlow.
+
+- Executes steps sequentially  
+- Applies retry policy (system-level)  
+- Applies onError rules (business-level)  
+- Evaluates input/output  
+- Records StepTrace  
+
+FlowEngine is pure and side‑effect‑free.
+
+---
+
+## **StepTrace**
+A complete, immutable record of execution:
+
+- beforeContext  
+- evaluatedInput  
+- rawOutput  
+- error  
+- timestamps  
+
+Perfect for debugging, auditing, and observability.
+
+---
+
+## **FlowResult**
+Returned by the runtime:
+
+- final ExecutionContext  
+- full StepTrace  
+
+Nothing more. Nothing less.
+
+---
+
+# 🏗 Runtime Layer
+
+The runtime provides integrations and I/O:
+
+- YAML parsing  
+- Module resolution  
+- Default StepInvoker  
+- FlowExecutor  
+- Web/Batch adapters  
+- DI integration  
+- Logging / metrics / tracing  
+
+The runtime is replaceable.  
+The core is eternal.
+
+---
+
+# 🧭 Philosophy
 
 BareFlow is built on a simple belief:
 
@@ -81,6 +170,6 @@ BareFlow is built on a simple belief:
 
 ---
 
-## 📄 License
+# 📄 License
 
 BareFlow is released under the **MIT License**.

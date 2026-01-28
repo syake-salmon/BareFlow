@@ -12,20 +12,6 @@
     <!-- ===== Module Metadata ===== -->
     <artifactId>bareflow-core</artifactId>
     <name>BareFlow Core</name>
-    <description>Minimal, deterministic flow execution engine for BareFlow.</description>
+    <description>BareFlow Core — Pure flow model and deterministic execution logic.</description>
     <packaging>jar</packaging>
-    <!-- ===== Dependencies ===== -->
-    <dependencies>
-        <!-- SLF4J API -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-        </dependency>
-        <!-- JUnit -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
 </project>
