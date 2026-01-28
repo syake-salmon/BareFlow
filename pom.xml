@@ -37,8 +37,6 @@
     <!-- ===== Modules ===== -->
     <modules>
         <module>bareflow-core</module>
-        <module>bareflow-resolver-filesystem</module>
-        <module>bareflow-extensions</module>
         <module>bareflow-runtime</module>
     </modules>
     <!-- ===== Dependency Management ===== -->
