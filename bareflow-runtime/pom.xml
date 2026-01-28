@@ -9,16 +9,18 @@
         <artifactId>bareflow-parent</artifactId>
         <version>1.0.0</version>
     </parent>
-    <!-- ===== Project Metadata ===== -->
+    <!-- ===== Module Metadata ===== -->
     <artifactId>bareflow-runtime</artifactId>
     <name>BareFlow Runtime</name>
     <description>Runtime utilities for BareFlow: YAML parsing, module resolution, and execution helpers.</description>
+    <packaging>jar</packaging>
     <!-- ===== Dependencies ===== -->
     <dependencies>
-        <!-- Core Engine -->
+        <!-- BareFlow Core -->
         <dependency>
             <groupId>io.github.syake-salmon</groupId>
             <artifactId>bareflow-core</artifactId>
+            <version>${project.version}</version>
         </dependency>
         <!-- YAML Parser (SnakeYAML Engine) -->
         <dependency>
