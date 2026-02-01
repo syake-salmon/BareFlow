@@ -101,8 +101,7 @@ public class FlowEngine {
 
         while (true) {
             attempts++;
-            Instant stepStartTime = Instant.now();
-            listener.onEvent(new StepStartEvent(step, attempts, stepStartTime));
+            listener.onEvent(new StepStartEvent(step, attempts, Instant.now()));
 
             final Instant start = Instant.now();
             final Map<String, Object> before = ctx.snapshot();
@@ -151,7 +150,7 @@ public class FlowEngine {
                         attempts);
                 trace.record(entry);
 
-                listener.onEvent(new StepEndEvent(entry, stepStartTime, Instant.now()));
+                listener.onEvent(new StepEndEvent(entry));
                 return; // success
 
             } catch (final BusinessException e) {
