@@ -1,11 +1,16 @@
 package run.bareflow.core.engine;
 
+import java.time.Instant;
+import java.util.Map;
+
 import run.bareflow.core.context.ExecutionContext;
 import run.bareflow.core.definition.FlowDefinition;
 import run.bareflow.core.definition.OnErrorDefinition;
 import run.bareflow.core.definition.RetryPolicy;
 import run.bareflow.core.definition.StepDefinition;
 import run.bareflow.core.engine.evaluator.StepEvaluator;
+import run.bareflow.core.engine.event.FlowEngineEvent.*;
+import run.bareflow.core.engine.event.FlowEngineEventListener;
 import run.bareflow.core.engine.invoker.StepInvoker;
 import run.bareflow.core.exception.BusinessException;
 import run.bareflow.core.exception.StepExecutionException;
@@ -13,138 +18,180 @@ import run.bareflow.core.exception.SystemException;
 import run.bareflow.core.trace.StepTrace;
 import run.bareflow.core.trace.StepTraceEntry;
 
-import java.time.Instant;
-import java.util.Map;
-
 /**
  * Formal implementation of BareFlow's execution engine.
  * Executes steps sequentially with retry and onError handling.
  *
+ * <p>
  * This engine relies on StepEvaluator for resolving input/output mappings.
  * BareFlow's evaluation model is intentionally simple:
+ * </p>
  *
- * - Only flat placeholders of the form "${name}" are supported.
- * - Nested or hierarchical expressions such as "${a.b}" are not supported.
- * - For input evaluation: placeholders are resolved from the ExecutionContext.
- * - For output evaluation: placeholders are resolved first from the raw output
- * returned by the StepInvoker, then from the ExecutionContext.
+ * <ul>
+ * <li>Only flat placeholders of the form "${name}" are supported.</li>
+ * <li>No nested expressions such as "${a.b}".</li>
+ * <li>Input placeholders are resolved from the ExecutionContext.</li>
+ * <li>Output placeholders are resolved first from the raw output,
+ * then from the ExecutionContext.</li>
+ * </ul>
  *
- * These rules are defined by StepEvaluator and enforced by the default
- * implementation provided in the core module.
- *
- * Core dependencies:
- * - StepEvaluator
- * - StepInvoker
- * - Definition models (FlowDefinition, StepDefinition, RetryPolicy,
- * OnErrorDefinition)
- * - ExecutionContext
- * - StepTrace
+ * <p>
+ * Retry semantics:
+ * </p>
+ * <ul>
+ * <li>attempts start at 1</li>
+ * <li>RetryPolicy.maxAttempts = total number of attempts</li>
+ * <li>RetryPolicy applies only to SystemException / StepExecutionException</li>
+ * <li>BusinessException is never retried by RetryPolicy</li>
+ * <li>onError.RETRY performs exactly one retry, independent of RetryPolicy</li>
+ * </ul>
  */
-
 public class FlowEngine {
     private final StepEvaluator evaluator;
     private final StepInvoker invoker;
+    private final FlowEngineEventListener listener;
+    private boolean onErrorRetryUsed = false;
 
-    public FlowEngine(StepEvaluator evaluator, StepInvoker invoker) {
+    public FlowEngine(final StepEvaluator evaluator,
+            final StepInvoker invoker,
+            final FlowEngineEventListener listener) {
         this.evaluator = evaluator;
         this.invoker = invoker;
+        this.listener = listener;
     }
 
     /**
      * Execute a flow using the given context.
      * Returns a StepTrace representing the full execution history.
-     * 
-     * @param flow flow definition
-     * @param ctx  execution context
      */
-    public StepTrace execute(FlowDefinition flow, ExecutionContext ctx) {
-        StepTrace trace = new StepTrace();
+    public StepTrace execute(final FlowDefinition flow, final ExecutionContext ctx) {
+        listener.onEvent(new FlowStartEvent(flow));
 
-        for (StepDefinition step : flow.getSteps()) {
-            executeStepWithControl(flow, step, ctx, trace);
+        final StepTrace trace = new StepTrace();
+
+        for (final StepDefinition step : flow.getSteps()) {
+            this.executeStepWithControl(flow, step, ctx, trace);
         }
 
+        listener.onEvent(new FlowEndEvent(flow, trace));
         return trace;
     }
 
     /**
      * Execute a single step with retry and onError handling.
      *
+     * <p>
      * RetryPolicy:
-     * - attempts start at 1
-     * - retry is allowed while attempts <= maxAttempts
-     * - this means "maxAttempts = maximum number of total attempts"
-     *
-     * Output mapping:
-     * - if the output mapping is empty, nothing is written to the context
-     * - if the mapping is present, only mapped keys are evaluated and merged
-     * - evaluator handles simple "${name}" placeholders (no nested paths)
+     * </p>
+     * <ul>
+     * <li>attempts start at 1</li>
+     * <li>retry is allowed while attempts &lt; maxAttempts</li>
+     * <li>maxAttempts = total number of attempts</li>
+     * </ul>
      */
-    private void executeStepWithControl(FlowDefinition flow,
-            StepDefinition step,
-            ExecutionContext ctx,
-            StepTrace trace) {
+    private void executeStepWithControl(
+            final FlowDefinition flow,
+            final StepDefinition step,
+            final ExecutionContext ctx,
+            final StepTrace trace) {
 
-        RetryPolicy retryPolicy = step.getRetryPolicy();
+        final RetryPolicy retryPolicy = step.getRetryPolicy();
         int attempts = 0;
 
         while (true) {
             attempts++;
+            listener.onEvent(new StepStartEvent(step, attempts));
 
-            Instant start = Instant.now();
-            Map<String, Object> before = ctx.snapshot();
+            final Instant start = Instant.now();
+            final Map<String, Object> before = ctx.snapshot();
 
             try {
                 // 1. Evaluate input
-                Map<String, Object> evaluatedInput = evaluator.evaluateInput(step.getInput(), ctx);
+                listener.onEvent(new InputEvaluationStartEvent(step, attempts));
+                final Map<String, Object> evaluatedInput = this.evaluator.evaluateInput(step.getInput(), ctx);
+                listener.onEvent(new InputEvaluationEndEvent(step, attempts, evaluatedInput));
 
                 // 2. Invoke module operation
-                Map<String, Object> output = invoker.invoke(step.getModule(), step.getOperation(), evaluatedInput);
+                listener.onEvent(new InvokeStartEvent(step, attempts, evaluatedInput));
+                final Map<String, Object> rawOutput = this.invoker.invoke(step.getModule(), step.getOperation(),
+                        evaluatedInput);
+                listener.onEvent(new InvokeEndEvent(step, attempts, rawOutput));
 
                 // 3. Apply output mapping
                 if (!step.getOutput().isEmpty()) {
-                    Map<String, Object> mapped = evaluator.evaluateOutput(step.getOutput(), output, ctx);
-                    ctx.merge(mapped);
+                    listener.onEvent(new OutputEvaluationStartEvent(step, attempts, rawOutput));
+
+                    final Map<String, Object> mappedOutput = this.evaluator.evaluateOutput(step.getOutput(), rawOutput,
+                            ctx);
+                    ctx.merge(mappedOutput);
+
+                    listener.onEvent(new OutputEvaluationEndEvent(step, attempts, mappedOutput));
                 }
 
-                // 4. Record success trace
-                trace.record(new StepTraceEntry(
+                // 4. Record success
+                final StepTraceEntry entry = new StepTraceEntry(
                         step.getName(),
                         before,
                         evaluatedInput,
-                        output,
+                        rawOutput,
                         null,
                         start,
-                        Instant.now()));
+                        Instant.now(),
+                        attempts);
+                trace.record(entry);
 
+                listener.onEvent(new StepEndEvent(entry));
                 return; // success
 
-            } catch (BusinessException be) {
-                // Business errors are not retried
-                recordError(trace, step, before, be, start);
-                handleOnError(flow, step, be);
+            } catch (final BusinessException e) {
+                listener.onEvent(new BusinessErrorEvent(step, attempts, e));
+                this.recordError(trace, step, before, e, start, attempts);
+
+                // Business errors are not retried by RetryPolicy
+                final boolean retry = this.handleOnError(flow, step, attempts, e);
+                if (retry) {
+                    continue; // onError.RETRY → exactly one retry
+                }
                 return;
 
-            } catch (SystemException se) {
-                // System errors may be retried
-                if (retryPolicy != null && attempts <= retryPolicy.getMaxAttempts()) {
-                    sleep(retryPolicy.getBackoffMillis());
+            } catch (final SystemException e) {
+                listener.onEvent(new SystemErrorEvent(step, attempts, e));
+                this.recordError(trace, step, before, e, start, attempts);
+
+                // System errors may be retried by RetryPolicy
+                if (retryPolicy != null && attempts < retryPolicy.getMaxAttempts()) {
+                    long delayMillis = retryPolicy.getDelayMillis();
+
+                    listener.onEvent(new RetryPolicyRetryEvent(step, attempts, delayMillis));
+
+                    this.sleep(delayMillis);
                     continue;
                 }
 
-                recordError(trace, step, before, se, start);
-                handleOnError(flow, step, se);
+                final boolean retry = this.handleOnError(flow, step, attempts, e);
+                if (retry) {
+                    continue;
+                }
                 return;
 
-            } catch (StepExecutionException se) {
-                // General execution errors → treat like SystemException
-                if (retryPolicy != null && attempts <= retryPolicy.getMaxAttempts()) {
-                    sleep(retryPolicy.getBackoffMillis());
+            } catch (final StepExecutionException e) {
+                listener.onEvent(new StepExecutionErrorEvent(step, attempts, e));
+                this.recordError(trace, step, before, e, start, attempts);
+
+                // Treated the same as SystemException
+                if (retryPolicy != null && attempts < retryPolicy.getMaxAttempts()) {
+                    long delayMillis = retryPolicy.getDelayMillis();
+
+                    listener.onEvent(new RetryPolicyRetryEvent(step, attempts, delayMillis));
+
+                    this.sleep(delayMillis);
                     continue;
                 }
 
-                recordError(trace, step, before, se, start);
-                handleOnError(flow, step, se);
+                final boolean retry = this.handleOnError(flow, step, attempts, e);
+                if (retry) {
+                    continue;
+                }
                 return;
             }
         }
@@ -153,17 +200,19 @@ public class FlowEngine {
     /**
      * Handle onError behavior (STOP / CONTINUE / RETRY).
      *
-     * RETRY:
-     * - onError.RETRY performs exactly one retry
-     * - this is independent from RetryPolicy
+     * <p>
+     * RETRY performs exactly one retry, independent of RetryPolicy.
+     * </p>
+     *
+     * @return true if the step should be retried once, false otherwise
      */
-    private void handleOnError(FlowDefinition flow,
-            StepDefinition step,
-            Throwable error) {
+    private boolean handleOnError(
+            final FlowDefinition flow,
+            final StepDefinition step,
+            final int attempts,
+            final Throwable error) {
 
-        OnErrorDefinition onError = step.getOnError() != null
-                ? step.getOnError()
-                : flow.getOnError();
+        final OnErrorDefinition onError = step.getOnError() != null ? step.getOnError() : flow.getOnError();
 
         if (onError == null) {
             throw new StepExecutionException("Unhandled error: " + error.getMessage(), error);
@@ -174,11 +223,19 @@ public class FlowEngine {
                 throw new StepExecutionException("Flow stopped due to error", error);
 
             case CONTINUE:
-                return;
+                return false;
 
             case RETRY:
-                sleep(onError.getDelayMillis());
-                return;
+                if (!onErrorRetryUsed) {
+                    final long delayMillis = onError.getDelayMillis();
+
+                    listener.onEvent(new OnErrorRetryEvent(step, attempts, delayMillis));
+
+                    sleep(delayMillis);
+                    onErrorRetryUsed = true;
+                    return true;
+                }
+                return false;
 
             default:
                 throw new StepExecutionException("Unknown onError action", error);
@@ -186,13 +243,15 @@ public class FlowEngine {
     }
 
     /**
-     * Record error trace entry.
+     * Record an error attempt into the trace.
      */
-    private void recordError(StepTrace trace,
-            StepDefinition step,
-            Map<String, Object> before,
-            Throwable error,
-            Instant start) {
+    private void recordError(
+            final StepTrace trace,
+            final StepDefinition step,
+            final Map<String, Object> before,
+            final Throwable error,
+            final Instant start,
+            final int attempts) {
 
         trace.record(new StepTraceEntry(
                 step.getName(),
@@ -201,18 +260,20 @@ public class FlowEngine {
                 null,
                 error,
                 start,
-                Instant.now()));
+                Instant.now(),
+                attempts));
     }
 
     /**
      * Sleep helper for retry delays.
      */
-    private void sleep(long millis) {
-        if (millis <= 0)
+    private void sleep(final long millis) {
+        if (millis <= 0L) {
             return;
+        }
         try {
             Thread.sleep(millis);
-        } catch (InterruptedException ignored) {
+        } catch (final InterruptedException ignored) {
             // NOP
         }
     }
