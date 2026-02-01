@@ -27,7 +27,9 @@ import java.util.function.Function;
  */
 public class FlowExecutor {
     private final FlowDefinitionResolver definitionResolver;
+    @SuppressWarnings("unused")
     private final StepEvaluator evaluator;
+    @SuppressWarnings("unused")
     private final StepInvoker invoker;
     private final Function<FlowExecutor, FlowEngine> engineFactory;
 
