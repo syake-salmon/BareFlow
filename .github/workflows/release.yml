@@ -18,7 +18,7 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: maven
-          server-id: central
+          server-id: central-publishing
           server-username: ${{ secrets.SONATYPE_USERNAME }}
           server-password: ${{ secrets.SONATYPE_PASSWORD }}
 
