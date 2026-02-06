@@ -168,7 +168,9 @@
                 <groupId>org.sonatype.central</groupId>
                 <artifactId>central-publishing-maven-plugin</artifactId>
                 <version>0.10.0</version>
-                <extensions>true</extensions>
+                <configuration>
+                    <autoPublish>true</autoPublish>
+                </configuration>
             </plugin>
             <!-- ===== Site ===== -->
             <plugin>
