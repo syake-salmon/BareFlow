@@ -19,11 +19,8 @@ jobs:
           java-version: 17
           cache: maven
           server-id: central
-          server-username: ${{ env.MAVEN_CENTRAL_USERNAME }}
-          server-password: ${{ env.MAVEN_CENTRAL_PASSWORD }}
-        env:
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          server-username: ${{ secrets.SONATYPE_USERNAME }}
+          server-password: ${{ secrets.SONATYPE_PASSWORD }}
 
       - name: Import GPG key
         run: |
