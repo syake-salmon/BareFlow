@@ -18,9 +18,11 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: maven
-          server-id: central-publishing
-          server-username: ${{ secrets.SONATYPE_USERNAME }}
-          server-password: ${{ secrets.SONATYPE_PASSWORD }}
+
+      - name: Set up Maven settings
+        uses: s4u/maven-settings-action@v4.0.0
+        with:
+          servers: '[{"id": "central", "username": "${{ secrets.SONATYPE_USERNAME }}", "password": "${{ secrets.SONATYPE_PASSWORD }}"}]'
 
       - name: Import GPG key
         run: |
@@ -32,7 +34,7 @@ jobs:
         run: gpg --list-secret-keys
 
       - name: Publish to Maven Central
-        run: mvn -B -DskipTests deploy
+        run: mvn -B deploy
         env:
           MAVEN_GPG_KEY: ${{ secrets.MAVEN_GPG_KEY }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
